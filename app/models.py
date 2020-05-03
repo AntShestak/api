@@ -69,8 +69,6 @@ class Item(db.Model):
 		Creates token used to pass this item
 		"""
 		now = datetime.utcnow()
-		if self.token and self.token_expiration > now + timedelta(seconds=60):
-			return self.token
 		self.token = base64.b64encode(os.urandom(24)).decode('utf-8')
 		self.token_expiration = now + timedelta(seconds=expires_in)
 		self.recipient = recipient.login
@@ -82,9 +80,14 @@ class Item(db.Model):
 		"""
 		Checks 
 		"""
-		if not self.token == token or self.token_expiration < datetime.utcnow():
+		#get user from recipients login
+		user = User.query.filter_by(login=self.recipient).first()
+		if not self.token == token or self.token_expiration < datetime.utcnow() or not user:
 			return None
-		return self.recipient #login of recipient
+		self.owner = user
+		db.session.add(self)
+		db.session.commit()
+		return True
 		
 		
 		

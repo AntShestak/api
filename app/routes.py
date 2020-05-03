@@ -3,7 +3,7 @@ from app import api
 from flask import jsonify, request, url_for
 from app import db
 from app.models import User, Item
-from app.errors import bad_request, not_found, internal_error, forbidden
+from app.errors import error_response, bad_request, forbidden
 
 #registration route
 @api.route('/registration', methods=['POST'])
@@ -38,12 +38,12 @@ def auth_user():
 	user = User.query.filter_by(login=data['login']).first()
 	if user and user.check_password(data['password']):
 		#create authorisation token for user
-		response = jsonify(user.get_auth_token())
+		response = jsonify({'token':user.get_auth_token()})
 		response.status_code = 200
 		return response
 	else:
 		#user doesn't exist
-		return not_found('Wrong login or password.')
+		return error_response(404,'Wrong login or password.')
 		
 #object creation route
 @api.route('/items/new', methods=['POST'])
@@ -69,7 +69,7 @@ def create_item():
 		response.status_code = 201
 		return response
 	else:
-		forbidden('User not authorised.')
+		error_response(403,'Please log in.')
 	
 #object deletion route
 @api.route('/items/<int:id>', methods=['DELETE'])
@@ -82,7 +82,7 @@ def delete_item(id):
 	#get required item (id is passed in endpoint)
 	item = Item.query.get(id)
 	if not item:
-		return not_found('Wrong item id.')
+		return error_response(404,'Wrong item id.')
 	#get user from token
 	user = User.check_auth_token(data['token'])
 	#check if user was found and if he is owner of the item
@@ -95,7 +95,7 @@ def delete_item(id):
 		response.status_code = 200
 		return response
 	else:
-		forbidden('User not authorised.')
+		error_response(403,'Please log in.')
 	
 #objects list route
 @api.route('/items', methods=['GET'])
@@ -112,7 +112,7 @@ def get_objects():
 		response.status_code = 200
 		return response
 	else:
-		forbidden('User not authorised.')
+		error_response(403,'Please log in.')
 
 #ADDITIONAL --------------------
 #send object route
@@ -125,12 +125,10 @@ def send_object():
 		return bad_request('Token, id and login fields must be included')
 	#get required item 
 	item = Item.query.get(data['id'])
-	if not item:
-		return not_found('Wrong item id.')
 	#check if the recipient exists
 	recipient = User.query.filter_by(login=data['login']).first()
-	if not recipient:
-		return not_found("Wrong recipient's login.")
+	if not item or not recipient:
+		return error_response(404,"Item or recipient doesn't exist.")
 	#get user from token
 	user = User.check_auth_token(data['token'])
 	#check if user was found and if he is owner of the item
@@ -141,7 +139,7 @@ def send_object():
 		response.status_code = 200
 		return response
 	else:
-		forbidden('User not authorised.')
+		error_response(403,'Please log in.')
 	
 	
 #receive object
@@ -155,24 +153,34 @@ def receive_object():
 	#get required item 
 	item = Item.query.get(data['id'])
 	if item:
-		recipient = item.check_item_token(data['token'])
-		if recipient:
-			#get user from recipients login
-			user = User.query.filter_by(login=recipient).first()
-			if user:
-				#change owner of the item
-				item.owner = user
-				db.session.commit()
-				#create response
-				response = jsonify("Object was succesfully transfered")
-				response.status_code = 200
-				return response
-			else:
-				not_found('User not found.')
+		if item.check_item_token(data['token']):
+			#create response
+			response = jsonify("Object was succesfully transfered")
+			response.status_code = 200
+			return response
+			#recipient = item.check_item_token(data['token'])
+			#if recipient:
+			#	#get user from recipients login
+			#	user = User.query.filter_by(login=recipient).first()
+			#	if user:
+			#		#change owner of the item
+			#		item.owner = user
+			#		db.session.commit()
+			#		#create response
+			#		response = jsonify("Object was succesfully transfered")
+			#		response.status_code = 200
+			#		return response
+			#	else:
+			#		error_response(404,'User not found.')
+			#else:
+			#	bad_request('Token not recognised')
 		else:
-			bad_request('Token not recognised')
-	else:
-		return not_found('Item not found.')
-	
+			return error_response(404,'Token issue.')
 		
-	
+	else:
+		return error_response(404,'Item not found.')
+		
+#wrong endpoint
+@api.errorhandler(404)
+def page_not_found(e):
+	return error_response(404,'The resource could not be found')
