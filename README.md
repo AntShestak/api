@@ -62,7 +62,7 @@ Endpoint information:
 
 
 
-	'/Items 
+	'/Items'
 
 	Returns list of items that are under user's ownership. Pass authorisation token as parameter. 	Requires authorisation.
 
@@ -99,7 +99,7 @@ Endpoint information:
 
 
 
-	'/get 
+	'/get'
 
 	Confirm receiving the item sent by method '/send'. Requires item token received from '/send' 	method. Pass token as 'token' and item's id as 'id'. 
 	
