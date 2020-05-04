@@ -3,7 +3,9 @@ from app import api
 from flask import jsonify, request, url_for
 from app import db
 from app.models import User, Item
-from app.errors import error_response, bad_request, forbidden
+from app.errors import error_response, bad_request
+from app.exceptions import DatabaseError
+from sqlalchemy import exc
 
 #registration route
 @api.route('/registration', methods=['POST'])
@@ -12,14 +14,17 @@ def create_user():
 	data = request.get_json() or {}
 	#check if required fields exist
 	if 'login' not in data or 'password' not in data:
-		return bad_request('login and password fields must be included')
+		return bad_request('Login and password fields must be included.')
 	#check if entity with this login exists
 	if User.query.filter_by(login=data['login']).first():
 		return bad_request('please use a different login')
 	#create user
 	user = User(login=data['login'], password=data['password'])
 	db.session.add(user)
-	db.session.commit()
+	try:
+		db.session.commit()
+	except exc.SQLAlchemyError:
+		raise DatabaseError('Database error')
 	#create response
 	response = jsonify(f"User {data['login']} created!")
 	response.status_code = 201
@@ -158,22 +163,6 @@ def receive_object():
 			response = jsonify("Object was succesfully transfered")
 			response.status_code = 200
 			return response
-			#recipient = item.check_item_token(data['token'])
-			#if recipient:
-			#	#get user from recipients login
-			#	user = User.query.filter_by(login=recipient).first()
-			#	if user:
-			#		#change owner of the item
-			#		item.owner = user
-			#		db.session.commit()
-			#		#create response
-			#		response = jsonify("Object was succesfully transfered")
-			#		response.status_code = 200
-			#		return response
-			#	else:
-			#		error_response(404,'User not found.')
-			#else:
-			#	bad_request('Token not recognised')
 		else:
 			return error_response(404,'Token issue.')
 		
@@ -184,3 +173,13 @@ def receive_object():
 @api.errorhandler(404)
 def page_not_found(e):
 	return error_response(404,'The resource could not be found')
+	
+#internal server error
+@api.errorhandler(500)
+def server_error(e):
+	return error_response(500,'Internal server error.')
+	
+#database error
+@api.errorhandler(DatabaseError)
+def database_error(e):
+	return error_response(e.status_code,e.message)

@@ -14,12 +14,3 @@ def error_response(status_code, message=None):
 def bad_request(message):
 	return error_response(400,message)
 	
-def forbidden(message):
-	return error_response(403,message)
-	
-def not_found(message):
-	return error_response(404,message)
-	
-def internal_error(message):
-	return error_response(500,message)
-	
