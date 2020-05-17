@@ -73,43 +73,23 @@ class BasicTests(unittest.TestCase):
 			json=dict(password='tt12tt34')
 			)
 		self.assertEqual(response.status_code, 400)
-		
-	#test send if the sent item gets received
-	def test_send_get_item(self):
-		#create 2 user
-		sender = User(login='Sender',password='123')
-		db.session.add(sender)
-		recipient = User(login='Recipient',password='123')
-		db.session.add(recipient)
-		#create an item that user owns
-		item = Item(name='Pen',owner=sender)
+	
+	
+	#test item token generation
+	def test_encode_item_token(self):
+		item = Item(name='Test')
 		db.session.add(item)
 		db.session.commit()
-		#assert that owner of the item is sender
-		self.assertIs(sender,item.owner)
-		#login user
-		response = self.login('Sender','123')
-		self.assertEqual(response.status_code,200)
-		response = json.loads(response.data)
-		#check if there's token
-		self.assertIn('token',response)
-		auth_token = response['token']
-		#send item 
-		response = self.send_item(auth_token,'Recipient','1')
-		self.assertEqual(response.status_code,200)
-		response = json.loads(response.data)
-		#check if there's token
-		self.assertIn('token',response)
-		item_token = response['token']
-		#get item
-		response = self.get_item(item_token,'1')
-		self.assertEqual(response.status_code,200)
-		#check that recipient is now owner of the item
-		item = Item.query.get(1)
-		self.assertIsNotNone(item)
-		recipient = User.query.filter_by(login='Recipient').first()
-		self.assertIsNotNone(recipient)
-		self.assertIs(recipient,item.owner)
+		token = item.generate_item_token('Tester')
+		self.assertTrue(isinstance(token,bytes))
+		
+	def test_decode_item_token(self):
+		item = Item(name='Test')
+		db.session.add(item)
+		db.session.commit()
+		token = item.generate_item_token('Tester')
+		self.assertTrue(isinstance(token,bytes))
+		self.assertFalse(Item.decode_item_token(token) == None,None)
 		
 if __name__ == "__main__":
 	unittest.main()

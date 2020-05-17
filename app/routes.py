@@ -26,7 +26,7 @@ def create_user():
 	except exc.SQLAlchemyError:
 		raise DatabaseError('Database error')
 	#create response
-	response = jsonify(f"User {data['login']} created!")
+	response = jsonify({'message' : f"User {data['login']} created!"})
 	response.status_code = 201
 	return response
 	
@@ -43,7 +43,10 @@ def auth_user():
 	user = User.query.filter_by(login=data['login']).first()
 	if user and user.check_password(data['password']):
 		#create authorisation token for user
-		response = jsonify({'token':user.get_auth_token()})
+		response = jsonify({
+		'message' : 'User authorised.',
+		'token' : user.get_auth_token()
+		})
 		response.status_code = 200
 		return response
 	else:
@@ -67,14 +70,14 @@ def create_item():
 		db.session.commit()
 		#create response
 		response = jsonify({
-		'message' : 'Item Created',
+		'message' : 'Item Created.',
 		'id' : item.id,
 		'item' : item.name 
 		})
 		response.status_code = 201
 		return response
 	else:
-		error_response(403,'Please log in.')
+		return error_response(403,'Please log in.')
 	
 #object deletion route
 @api.route('/items/<int:id>', methods=['DELETE'])
@@ -96,11 +99,11 @@ def delete_item(id):
 		db.session.delete(item)
 		db.session.commit()
 		#create response
-		response = jsonify("Item deleted.")
+		response = jsonify({'message' : "Item deleted."})
 		response.status_code = 200
 		return response
 	else:
-		error_response(403,'Please log in.')
+		return error_response(403,'Please log in.')
 	
 #objects list route
 @api.route('/items', methods=['GET'])
@@ -117,7 +120,7 @@ def get_objects():
 		response.status_code = 200
 		return response
 	else:
-		error_response(403,'Please log in.')
+		return error_response(403,'Please log in.')
 
 #ADDITIONAL --------------------
 #send object route
@@ -139,12 +142,13 @@ def send_object():
 	#check if user was found and if he is owner of the item
 	if user and user is item.owner:
 		response = jsonify({
-		'token' : item.generate_item_token(recipient),
+		'message' : 'Item token generated.',
+		'item_token' : item.generate_item_token(data['login']).decode(),
 		})
 		response.status_code = 200
 		return response
 	else:
-		error_response(403,'Please log in.')
+		return error_response(403,'Please log in.')
 	
 	
 #receive object
@@ -152,19 +156,28 @@ def send_object():
 def receive_object():
 	#extract request data or none
 	data = request.get_json() or {}
-	#check if required fields exist
-	if 'token' not in data and 'id' not in data:
-		return bad_request('Token and id fields must be included')
+	#check if required fields exist (auth_token, and item_token)
+	if 'auth_token' not in data or 'item_token' not in data:
+		return bad_request('Auth token and item token must be included')
+	#authorise user from token
+	user = User.check_auth_token(data['auth_token'])
+	#check if user is authorised and is ssame as item's recipient
+	if not user:
+		return error_response(401,'User not authorised.')
 	#get required item 
-	item = Item.query.get(data['id'])
-	if item:
-		if item.check_item_token(data['token']):
+	recipient , item = Item.decode_item_token(data['item_token'])
+	#check if item and recipient were found
+	if item and recipient:
+		#if user is same as item's recipient
+		if recipient is user:
+			item.owner = user
+			db.session.commit()
 			#create response
-			response = jsonify("Object was succesfully transfered")
+			response = jsonify({'message' : "Object was succesfully transfered."})
 			response.status_code = 200
 			return response
 		else:
-			return error_response(404,'Token issue.')
+			return error_response(403,'Resource is forbidden.')
 		
 	else:
 		return error_response(404,'Item not found.')
